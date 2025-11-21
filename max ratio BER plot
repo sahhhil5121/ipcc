@@ -1,0 +1,33 @@
+clc;
+clear;
+close;
+N = 5;               
+m = 10^6;             
+ip = rand(1, m) > 0.5;  
+BPSK = 2*ip - 1;        
+snr_dB = 0:1:15
+snr = 10.^(snr_dB/10);  
+L = 2;                  
+p_R_MRC = 0.5 - 0.5 * (1 + 1 ./ snr).^(-0.5);
+ber_MRC_ana = p_R_MRC.^2 .* (1 + 2 * (1 - p_R_MRC));
+n_err = zeros(1, length(snr_dB));  
+for p = 1:N
+    for q = 1:length(snr_dB)
+        No = (1/sqrt(2)) * (rand(L, m, "normal") + %i * rand(L, m, "normal"));
+        h = (1/sqrt(2)) * (rand(L, m, "normal") + %i * rand(L, m, "normal"));
+        symbol = repmat(BPSK, L, 1);
+        rec_vector = h .* symbol + 10^(-snr_dB(q)/20) * No;
+        dec_metric = sum(conj(h) .* rec_vector, "r") ./ sum(h .* conj(h), "r");
+        ip_hat = real(dec_metric) > 0;
+        n_err(q) = n_err(q) + length(find(ip <> ip_hat));
+    end
+end
+ber_MRC_sim = n_err / (N * m);
+scf(0);
+semilogy(snr_dB, ber_MRC_ana, '-r*', 'LineWidth', 2);
+semilogy(snr_dB, ber_MRC_sim, 'ob', 'LineWidth', 2);
+xlabel("SNR (dB)");
+ylabel("BER");
+legend(["BER MRC Analytical", "BER MRC Simulated"]);
+title("BPSK with 2-Branch MRC Diversity over Rayleigh Channel");
+xgrid();
