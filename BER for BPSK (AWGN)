@@ -1,0 +1,46 @@
+clc;
+clear all;
+close all;
+
+snr_dB = 0:1:20;
+m = 1e5;
+min_err = 100;
+max_bits = 1e6;
+BER = zeros(1,length(snr_dB));
+
+for i = 1:length(snr_dB)
+    n_err = 0;
+    n_bits = 0;
+    
+    while (n_err < min_err & n_bits < max_bits)
+        
+        inf_bits = round(rand(1,m));
+        x = 2*inf_bits - 1;
+        
+        N0 = 1/(10^(snr_dB(i)/10));
+        n = sqrt(N0/2)*rand(1,m,"normal");
+        
+        y = x + n;
+        
+        result_bits = (y > 0);
+        
+        err = inf_bits - result_bits;
+        n_err = n_err + sum(abs(err));
+        n_bits = n_bits + m;
+    end
+    
+    BER(i) = n_err/n_bits;
+end
+
+valid = BER > 0;
+
+subplot(1,2,1)
+BER_theory = 0.5*erfc(sqrt(10^(snr_dB/10)));
+semilogy(snr_d_B,BER_theory)
+xlabel("SNR in dB")
+ylabel("Theoretical bit error rate")
+
+subplot(1,2,2)
+semilogy(snr_dB(valid),BER(valid))
+xlabel("SNR in dB")
+ylabel("Practical SNR")
