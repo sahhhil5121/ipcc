@@ -1,0 +1,71 @@
+clc;
+clear;
+close all;
+
+m = 1e5;
+snr_dB = 0:1:20;
+BER = zeros(1, length(snr_dB));
+
+function r=randn_gauss(rows, cols)
+    u1 = rand(rows, cols);
+    u2 = rand(rows, cols);
+    r = sqrt(-2 * log(u1)) .* cos(2 * %pi * u2);
+endfunction
+
+for j = 1:length(snr_dB)
+    n_err = 0;
+    n_bits = 0;
+    
+    while n_err < 100
+        inf_bits = round(rand(1, m));
+        x = -2 * (inf_bits - 0.5);
+        
+        N0 = 1 / (10^(snr_dB(j) / 10));
+        
+        h = (randn_gauss(1, length(x)) + %i * randn_gauss(1, length(x))) / sqrt(2);
+        
+        noise = sqrt(N0 / 2) * (randn_gauss(1, length(x)) + %i * randn_gauss(1, length(x)));
+        
+        y = h .* x + noise;
+        y = y ./ h;
+        
+        est_bits = real(y) < 0;
+        
+        diff = inf_bits - est_bits;
+        n_err = n_err + sum(abs(diff));
+        n_bits = n_bits + length(inf_bits);
+    end
+    
+    BER(j) = n_err / n_bits;
+end
+
+snr_lin = 10 .^ (snr_dB / 10);
+theoryBer_Rayleigh = 0.5 * (1 - sqrt(snr_lin ./ (snr_lin + 1)));
+theoryBer_AWGN     = 0.5 * erfc(sqrt(snr_lin));
+
+scf(0);
+clf;
+
+subplot(2,1,1)
+semilogy(snr_dB, theoryBer_Rayleigh, 'b-',  'LineWidth', 2, 'DisplayName', 'Rayleigh Theoretical');
+
+a1 = gca();
+a1.data_bounds = [0 1e-6; 20 0.5];
+a1.tight_limits = "on";
+xlabel('SNR (dB)');
+ylabel('Bit Error Rate');
+title('BPSK over Rayleigh Fading Channel (ZF Equalization)');
+legend('Location','southwest');
+xgrid();
+
+subplot(2,1,2)
+semilogy(snr_dB, theoryBer_AWGN, 'k-s', 'LineWidth', 2, 'MarkerSize', 6, 'MarkerFaceColor', 'k', 'DisplayName', 'AWGN Theoretical');
+
+a2 = gca();
+a2.data_bounds = [0 1e-6; 20 0.5];
+a2.tight_limits = "on";
+xlabel('SNR (dB)');
+ylabel('Bit Error Rate');
+title('BPSK over AWGN Channel');
+legend('Location','southwest');
+xgrid();
