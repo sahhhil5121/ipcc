@@ -1,0 +1,79 @@
+clear;
+clc;
+close;
+
+Nfft = 64;
+cp_len = 16;
+M = 4;
+k = log2(M);
+
+num_bits = 10000;
+rem = modulo(num_bits, Nfft*k);
+if rem <> 0 then
+    num_bits = num_bits + (Nfft*k - rem);
+end
+
+SNR_dB = 0:2:20;
+BER = zeros(1, length(SNR_dB));
+
+bits = round(rand(1, num_bits));
+
+num_symbols = num_bits / k;
+bits_reshaped = matrix(bits, k, num_symbols);
+
+sym_map = [1+%i, -1+%i, -1-%i, 1-%i] / sqrt(2);
+index = bits_reshaped(1,:)*2 + bits_reshaped(2,:) + 1;
+qpsk_symbols = sym_map(index);
+
+num_ofdm_symbols = num_symbols / Nfft;
+data_matrix = matrix(qpsk_symbols, Nfft, num_ofdm_symbols);
+
+ifft_data = ifft(data_matrix);
+
+tx_with_cp = [ifft_data($-cp_len+1:$,:); ifft_data];
+
+tx_signal = tx_with_cp(:).';
+
+for i = 1:length(SNR_dB)
+
+    snr = SNR_dB(i);
+
+    signal_power = mean(abs(tx_signal).^2);
+    noise_power = signal_power / (10^(snr/10));
+
+    noise = sqrt(noise_power/2) * (rand(1,length(tx_signal),"normal") + %i*rand(1,length(tx_signal),"normal"));
+    rx_signal = tx_signal + noise;
+
+    rx_matrix = matrix(rx_signal, Nfft + cp_len, num_ofdm_symbols);
+
+    rx_no_cp = rx_matrix(cp_len+1:$, :);
+
+    rx_fft = fft(rx_no_cp, -1);
+
+    rx_symbols = rx_fft(:).';
+
+    demod_bits = zeros(1, num_bits);
+    rx_real = real(rx_symbols);
+    rx_imag = imag(rx_symbols);
+
+    for m = 1:num_symbols
+        if rx_real(m) > 0 & rx_imag(m) > 0 then
+            demod_bits((m-1)*2+1 : m*2) = [0 0];
+        elseif rx_real(m) < 0 & rx_imag(m) > 0 then
+            demod_bits((m-1)*2+1 : m*2) = [1 0];
+        elseif rx_real(m) < 0 & rx_imag(m) < 0 then
+            demod_bits((m-1)*2+1 : m*2) = [1 1];
+        else
+            demod_bits((m-1)*2+1 : m*2) = [0 1];
+        end
+    end
+
+    BER(i) = sum(bits <> demod_bits) / num_bits;
+end
+
+scf(1); clf;
+plot(SNR_dB, BER, "-o");
+xlabel("SNR (dB)");
+ylabel("Bit Error Rate (BER)");
+title("BER Performance of Multicarrier OFDM (QPSK)");
+xgrid;
