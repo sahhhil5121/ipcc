@@ -1,79 +1,39 @@
-clear;
 clc;
+clear;
 close;
-
-Nfft = 64;
-cp_len = 16;
-M = 4;
-k = log2(M);
-
-num_bits = 10000;
-rem = modulo(num_bits, Nfft*k);
-if rem <> 0 then
-    num_bits = num_bits + (Nfft*k - rem);
-end
-
-SNR_dB = 0:2:20;
-BER = zeros(1, length(SNR_dB));
-
-bits = round(rand(1, num_bits));
-
-num_symbols = num_bits / k;
-bits_reshaped = matrix(bits, k, num_symbols);
-
-sym_map = [1+%i, -1+%i, -1-%i, 1-%i] / sqrt(2);
-index = bits_reshaped(1,:)*2 + bits_reshaped(2,:) + 1;
-qpsk_symbols = sym_map(index);
-
-num_ofdm_symbols = num_symbols / Nfft;
-data_matrix = matrix(qpsk_symbols, Nfft, num_ofdm_symbols);
-
-ifft_data = ifft(data_matrix);
-
-tx_with_cp = [ifft_data($-cp_len+1:$,:); ifft_data];
-
-tx_signal = tx_with_cp(:).';
-
-for i = 1:length(SNR_dB)
-
-    snr = SNR_dB(i);
-
-    signal_power = mean(abs(tx_signal).^2);
-    noise_power = signal_power / (10^(snr/10));
-
-    noise = sqrt(noise_power/2) * (rand(1,length(tx_signal),"normal") + %i*rand(1,length(tx_signal),"normal"));
-    rx_signal = tx_signal + noise;
-
-    rx_matrix = matrix(rx_signal, Nfft + cp_len, num_ofdm_symbols);
-
-    rx_no_cp = rx_matrix(cp_len+1:$, :);
-
-    rx_fft = fft(rx_no_cp, -1);
-
-    rx_symbols = rx_fft(:).';
-
-    demod_bits = zeros(1, num_bits);
-    rx_real = real(rx_symbols);
-    rx_imag = imag(rx_symbols);
-
-    for m = 1:num_symbols
-        if rx_real(m) > 0 & rx_imag(m) > 0 then
-            demod_bits((m-1)*2+1 : m*2) = [0 0];
-        elseif rx_real(m) < 0 & rx_imag(m) > 0 then
-            demod_bits((m-1)*2+1 : m*2) = [1 0];
-        elseif rx_real(m) < 0 & rx_imag(m) < 0 then
-            demod_bits((m-1)*2+1 : m*2) = [1 1];
-        else
-            demod_bits((m-1)*2+1 : m*2) = [0 1];
-        end
+m = 1000;
+snr_dB = 0:1:20;
+BER_sim = zeros(1, length(snr_dB));
+BER_theo = zeros(1, length(snr_dB));
+for j = 1:length(snr_dB)
+    n_err = 0;
+    n_bits = 0;
+    while n_err < 100
+        inf_bits = round(rand(1, m));
+        x = -2 * (inf_bits - 0.5);
+        N0 = 1 / (10^(snr_dB(j) / 10));
+        n1 = sqrt(N0/2) * (rand(1, length(x)) + %i * rand(1, length(x)));
+        n2 = sqrt(N0/2) * (rand(1, length(x)) + %i * rand(1, length(x)));
+        h1 = sqrt(0.5) * (rand(1, length(x)) + %i * rand(1, length(x)));
+        h2 = sqrt(0.5) * (rand(1, length(x)) + %i * rand(1, length(x)));
+        y1 = h1 .* x + n1;
+        y2 = h2 .* x + n2;
+        y_equal = 0.5 * (y1 + y2);
+        est_bits = (real(y_equal) < 0);
+        diff = inf_bits - est_bits;
+        n_err = n_err + sum(abs(diff));
+        n_bits = n_bits + length(inf_bits);
     end
-
-    BER(i) = sum(bits <> demod_bits) / num_bits;
+    BER_sim(j) = n_err / n_bits;
+    snr_lin = 10^(snr_dB(j) / 10);
+    BER_theo(j) = 0.5 * (1 - sqrt((snr_lin) / (1 + snr_lin)));
 end
+scf(0);
+semilogy(snr_dB, BER_sim, 'or-', 'LineWidth', 2);
+semilogy(snr_dB, BER_theo, 'b-', 'LineWidth', 2);
+legend(['Rayleigh EGC Simulated', 'Rayleigh Theoretical']);
+xlabel('SNR (dB)');
+ylabel('Bit Error Rate (BER)');
+title('BER Performance of BPSK under Rayleigh Fading (EGC)');
+xgrid();
 
-scf(1); clf;
-plot(SNR_dB, BER, "-o");
-xlabel("SNR (dB)");
-ylabel("Bit Error Rate (BER)");
-title("BER Performance of Multicarrier OFDM (QPSK)");
-xgrid;
