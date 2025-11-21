@@ -1,0 +1,32 @@
+clc; clear; close;
+
+Nbits = 1e5;
+snr_dB = 0:2:20;
+BER_sim = zeros(1, length(snr_dB)); BER_theory = zeros(1, length(snr_dB));
+for j = 1:length(snr_dB)
+
+bits = round(rand(1, Nbits));
+
+symbols = 2*bits - 1;
+h = (1/sqrt(2)) * (rand(1, Nbits, "normal") + %i*rand(1, Nbits, "normal"));
+N0 = 1/(10^(snr_dB(j)/10));
+
+noise = sqrt(N0/2) * (rand(1, Nbits, "normal") + %i*rand(1, Nbits, "normal"));
+
+rx = h .* symbols + noise;
+y_eq = rx ./ h;
+
+bits_hat = real(y_eq) > 0;
+
+n_err = sum(abs(bits - bits_hat)); BER_sim(j) = n_err / Nbits;
+end
+
+snr_lin = 10.^(snr_dB ./ 10);
+BER_theory = 0.5 * (1 - sqrt(snr_lin ./ (1 + snr_lin)));
+
+BER_sim(BER_sim == 0) = 1/Nbits; BER_theory(BER_theory == 0) = 1/Nbits;
+
+scf(0);
+semilogy(snr_dB, BER_sim, 'ro-', 'LineWidth', 2); plot(snr_dB, BER_theory, 'b-', 'LineWidth', 2); legend(["Rayleigh Simulated", "Rayleigh Theoretical"]); xlabel("SNR (dB)");
+ylabel("Bit Error Rate (BER)");
+xtitle("BER Performance of BPSK over Rayleigh Fading Channel"); xgrid();
